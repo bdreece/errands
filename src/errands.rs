@@ -1,52 +1,137 @@
 use std::{
     collections::BTreeMap,
     fs::File,
-    io::{BufReader, BufWriter},
+    io::{BufReader, BufWriter, Error, ErrorKind, Result},
 };
 
 use colored::{ColoredString, Colorize};
 use rand::{seq::SliceRandom, thread_rng};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use serde_yaml::{self, Result};
 
 use super::cli::{Location, Order, Priority};
-use super::{GLOBAL_ERR, GLOBAL_PATH, LOCAL_ERR, LOCAL_PATH, PRIORITY_COLORS, USER_ERR, USER_PATH};
+use super::{GLOBAL_PATH, LOCAL_PATH, PRIORITY_COLORS, USER_PATH};
 
 #[derive(Deserialize, Serialize)]
 pub struct Errands(BTreeMap<Priority, Vec<String>>);
 
-fn get_file(location: &Option<Location>) -> std::io::Result<File> {
+fn create_file(verbose: usize, location: &Location) -> Result<File> {
+    let file = match location {
+        Location::Local => {
+            if verbose > 1 {
+                println!(
+                    "{}",
+                    "Creating errands list in current working directory".green()
+                );
+            }
+            File::create(LOCAL_PATH.as_path())?
+        }
+        Location::User => {
+            if verbose > 1 {
+                println!(
+                    "{}",
+                    "Creating errands list in user config directory".green()
+                );
+            }
+            File::create(USER_PATH.as_path())?
+        }
+        Location::Global => {
+            if verbose > 1 {
+                println!("{}", "Creating errands list in global directory".green());
+            }
+            File::create(GLOBAL_PATH.as_path())?
+        }
+    };
+    Ok(file)
+}
+
+fn open_file(verbose: usize, truncate: bool, location: &Option<Location>) -> Result<File> {
     return match &location {
         Some(location) => match location {
-            Location::Local => Ok(File::open(LOCAL_PATH.as_path())?),
-            Location::User => Ok(File::open(USER_PATH.as_path())?),
-            Location::Global => Ok(File::open(GLOBAL_PATH.as_path())?),
+            Location::Local => {
+                if verbose > 1 {
+                    println!(
+                        "{}",
+                        "Opening errands list from current working directory".green()
+                    );
+                }
+                Ok(File::options()
+                    .read(true)
+                    .write(true)
+                    .truncate(truncate)
+                    .open(LOCAL_PATH.as_path())?)
+            }
+            Location::User => {
+                if verbose > 1 {
+                    println!(
+                        "{}",
+                        "Opening errands list from user config directory".green()
+                    );
+                }
+                Ok(File::options()
+                    .read(true)
+                    .write(true)
+                    .truncate(truncate)
+                    .open(USER_PATH.as_path())?)
+            }
+            Location::Global => {
+                if verbose > 1 {
+                    println!("{}", "Opening errands list from global directory".green());
+                }
+                Ok(File::options()
+                    .read(true)
+                    .write(true)
+                    .truncate(truncate)
+                    .open(GLOBAL_PATH.as_path())?)
+            }
         },
         None => {
+            if verbose > 1 {
+                println!("{}", "List location not specified!".yellow());
+            }
             let mut some_file: Option<File> = None;
-            if let Ok(file) = File::open(LOCAL_PATH.as_path()) {
+            if let Ok(file) = File::options()
+                .read(true)
+                .write(true)
+                .truncate(truncate)
+                .open(LOCAL_PATH.as_path())
+            {
+                if verbose > 1 {
+                    println!(
+                        "{}",
+                        "Found errands list in current working directory".green()
+                    );
+                }
                 some_file = Some(file);
-            } else if let Ok(file) = File::open(USER_PATH.as_path()) {
+            } else if let Ok(file) = File::options()
+                .read(true)
+                .write(true)
+                .truncate(truncate)
+                .open(USER_PATH.as_path())
+            {
+                if verbose > 1 {
+                    println!("{}", "Found errands list in user config directory".green());
+                }
                 some_file = Some(file);
-            } else if let Ok(file) = File::open(GLOBAL_PATH.as_path()) {
+            } else if let Ok(file) = File::options()
+                .read(true)
+                .write(true)
+                .truncate(truncate)
+                .open(GLOBAL_PATH.as_path())
+            {
+                if verbose > 1 {
+                    println!("{}", "Found errands list in global directory".green());
+                }
                 some_file = Some(file);
             }
-            Ok(some_file.ok_or(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Errands list not found",
-            ))?)
+            Ok(some_file.ok_or(Error::new(ErrorKind::NotFound, "Errands list not found"))?)
         }
     };
 }
 
 impl Errands {
-    pub fn new(location: &Location) -> Self {
-        let file = match location {
-            Location::Local => File::create(LOCAL_PATH.as_path()).expect(LOCAL_ERR.as_str()),
-            Location::User => File::create(USER_PATH.as_path()).expect(USER_ERR.as_str()),
-            Location::Global => File::create(GLOBAL_PATH.as_path()).expect(GLOBAL_ERR.as_str()),
-        };
+    pub fn new(verbose: usize, location: &Location) -> Self {
+        let file = create_file(verbose, location).unwrap();
         let mut errands = Errands(BTreeMap::new());
         errands.0.insert(Priority::Deferred, vec![]);
         errands.0.insert(Priority::Routine, vec![]);
@@ -55,29 +140,44 @@ impl Errands {
         errands.0.insert(Priority::Urgent, vec![]);
         errands.0.insert(Priority::Emergency, vec![]);
 
+        if verbose > 1 {
+            println!("{}", "Dumping template config to file".green());
+        }
+
         let writer = BufWriter::new(file);
         serde_yaml::to_writer(writer, &errands).unwrap();
         errands
     }
 
-    pub fn open(location: &Option<Location>) -> Result<Self> {
-        let file = get_file(location).unwrap();
+    pub fn open(verbose: usize, location: &Option<Location>) -> serde_yaml::Result<Self> {
+        let file = open_file(verbose, false, location).unwrap();
         let reader = BufReader::new(file);
         let errands: Errands = serde_yaml::from_reader(reader)?;
         Ok(errands)
     }
 
-    pub fn add(&mut self, errand: String, priority: &Option<Priority>) {
+    pub fn add(&mut self, verbose: usize, errand: String, priority: &Option<Priority>) {
         let priority = priority.unwrap_or(Priority::Routine);
         match self.0.get_mut(&priority) {
-            Some(list) => list.push(errand),
+            Some(list) => list.push(errand.clone()),
             None => {
-                self.0.insert(priority, vec![errand]);
+                self.0.insert(priority, vec![errand.clone()]);
             }
+        }
+        if verbose > 1 {
+            println!(
+                "{}",
+                format!(
+                    "Added '{}' to priority level: '{:?}'",
+                    errand.white(),
+                    priority
+                )
+                .green()
+            );
         }
     }
 
-    pub fn clean(&mut self, priority: &Option<Priority>) {
+    pub fn clean(&mut self, _verbose: usize, priority: &Option<Priority>) {
         match priority {
             Some(priority) => {
                 self.0.remove(priority);
@@ -88,6 +188,7 @@ impl Errands {
 
     pub fn list(
         &self,
+        _verbose: usize,
         ignore: &Option<String>,
         order: &Option<Order>,
         priority: &Option<Priority>,
@@ -134,7 +235,7 @@ impl Errands {
         }
     }
 
-    pub fn remove(&mut self, priority: &Option<Priority>, errands: Vec<String>) {
+    pub fn remove(&mut self, _verbose: usize, priority: &Option<Priority>, errands: Vec<String>) {
         match &priority {
             Some(priority) => {
                 self.0
@@ -150,14 +251,13 @@ impl Errands {
         }
     }
 
-    pub fn dump(self, location: &Option<Location>) -> Result<()> {
-        let file = match location {
-            Some(Location::User) => File::create(USER_PATH.as_path()).expect(USER_ERR.as_str()),
-            Some(Location::Global) => {
-                File::create(GLOBAL_PATH.as_path()).expect(GLOBAL_ERR.as_str())
-            }
-            _ => File::create(LOCAL_PATH.as_path()).expect(LOCAL_ERR.as_str()),
-        };
+    pub fn dump(
+        self,
+        verbose: usize,
+        truncate: bool,
+        location: &Option<Location>,
+    ) -> serde_yaml::Result<()> {
+        let file = open_file(verbose, truncate, &location).unwrap();
         let writer = BufWriter::new(file);
         serde_yaml::to_writer(writer, &self)?;
         Ok(())

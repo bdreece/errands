@@ -21,9 +21,9 @@ fn main() {
                     println!("Adding with priority: {:?}", priority);
                 }
             }
-            let mut errands = Errands::open(&location).unwrap();
-            errands.add(errand, &priority);
-            errands.dump(&location).unwrap();
+            let mut errands = Errands::open(args.verbose, &location).unwrap();
+            errands.add(args.verbose, errand, &priority);
+            errands.dump(args.verbose, true, &location).unwrap();
         }
         Commands::Clean { location, priority } => {
             if args.verbose > 1 {
@@ -33,9 +33,9 @@ fn main() {
                     println!("Cleaning with priority: {:?}", priority);
                 }
             }
-            let mut errands = Errands::open(&location).unwrap();
-            errands.clean(&priority);
-            errands.dump(&location).unwrap();
+            let mut errands = Errands::open(args.verbose, &location).unwrap();
+            errands.clean(args.verbose, &priority);
+            errands.dump(args.verbose, true, &location).unwrap();
         }
         Commands::List {
             location,
@@ -60,15 +60,15 @@ fn main() {
                     println!("Printing with count: {}", count);
                 }
             }
-            let errands = Errands::open(&location).unwrap();
-            errands.list(&ignore, &order, &priority, &count);
+            let errands = Errands::open(args.verbose, &location).unwrap();
+            errands.list(args.verbose, &ignore, &order, &priority, &count);
         }
         Commands::Init { location } => {
             if args.verbose > 1 {
                 println!("Initializing errands in location: {:?}", location);
             }
-            let errands = Errands::new(&location);
-            errands.dump(&Some(location)).unwrap();
+            let errands = Errands::new(args.verbose, &location);
+            errands.dump(args.verbose, false, &Some(location)).unwrap();
         }
         Commands::Rm {
             location,
@@ -82,9 +82,9 @@ fn main() {
                     println!("Removing with priority: {:?}", priority);
                 }
             }
-            let mut list = Errands::open(&location).unwrap();
-            list.remove(&priority, errands);
-            list.dump(&location).unwrap();
+            let mut list = Errands::open(args.verbose, &location).unwrap();
+            list.remove(args.verbose, &priority, errands);
+            list.dump(args.verbose, true, &location).unwrap();
         }
     }
 }
