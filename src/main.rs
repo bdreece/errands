@@ -2,7 +2,7 @@ use clap::Parser;
 
 use errands::{
     cli::{Args, Commands},
-    Errands,
+    errands::Errands,
 };
 
 fn main() {
@@ -14,10 +14,8 @@ fn main() {
             priority,
             errand,
         } => {
-            if args.verbose > 0 {
-                println!("Adding errand {}", errand);
-            }
             if args.verbose > 1 {
+                println!("Adding errand {}", errand);
                 println!("Using errands list in location: {:?}", location);
                 if let Some(priority) = priority {
                     println!("Adding with priority: {:?}", priority);
@@ -28,10 +26,8 @@ fn main() {
             errands.dump(&location).unwrap();
         }
         Commands::Clean { location, priority } => {
-            if args.verbose > 0 {
-                println!("Cleaning errands");
-            }
             if args.verbose > 1 {
+                println!("Cleaning errands");
                 println!("Using errands list in location: {:?}", location);
                 if let Some(priority) = priority {
                     println!("Cleaning with priority: {:?}", priority);
@@ -48,10 +44,8 @@ fn main() {
             priority,
             count,
         } => {
-            if args.verbose > 0 {
-                println!("Printing errands");
-            }
             if args.verbose > 1 {
+                println!("Printing errands");
                 println!("Using errands list in location: {:?}", location);
                 if let Some(pattern) = &ignore {
                     println!("Ignoring pattern: {}", pattern);
@@ -70,7 +64,7 @@ fn main() {
             errands.list(&ignore, &order, &priority, &count);
         }
         Commands::Init { location } => {
-            if args.verbose > 0 {
+            if args.verbose > 1 {
                 println!("Initializing errands in location: {:?}", location);
             }
             let errands = Errands::new(&location);
@@ -81,10 +75,8 @@ fn main() {
             priority,
             errands,
         } => {
-            if args.verbose > 0 {
-                println!("Removing items: {:#?}", errands);
-            }
             if args.verbose > 1 {
+                println!("Removing items: {:#?}", errands);
                 println!("Using errands list in location: {:?}", location);
                 if let Some(priority) = priority {
                     println!("Removing with priority: {:?}", priority);
