@@ -1,4 +1,5 @@
 use clap::{ArgEnum, Parser, Subcommand};
+use serde::{Deserialize, Serialize};
 
 /// Command line arguments
 #[derive(Parser, Debug)]
@@ -19,6 +20,16 @@ pub enum Order {
     Ascending,
     /// Random priority
     Random,
+}
+
+#[derive(Deserialize, Serialize, ArgEnum, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Priority {
+    Emergency,
+    Urgent,
+    High,
+    Medium,
+    Routine,
+    Deferred,
 }
 
 /// Errand list location
@@ -45,16 +56,16 @@ pub enum Commands {
         #[clap(short, long, arg_enum)]
         location: Option<Location>,
 
-        #[clap(short, long)]
-        priority: Option<usize>,
+        #[clap(arg_enum)]
+        priority: Option<Priority>,
     },
     /// Adds an item to the errands list
     Add {
         #[clap(short, long, arg_enum)]
         location: Option<Location>,
 
-        #[clap(short, long)]
-        priority: Option<usize>,
+        #[clap(short, long, arg_enum)]
+        priority: Option<Priority>,
 
         errand: String,
     },
@@ -70,18 +81,18 @@ pub enum Commands {
         order: Option<Order>,
 
         #[clap(short, long)]
-        priority: Option<usize>,
-
-        #[clap(short, long)]
         count: Option<usize>,
+
+        #[clap(arg_enum)]
+        priority: Option<Priority>,
     },
     /// Removes errand(s)
     Rm {
         #[clap(short, long, arg_enum)]
         location: Option<Location>,
 
-        #[clap(short, long)]
-        priority: Option<usize>,
+        #[clap(arg_enum)]
+        priority: Option<Priority>,
 
         errands: Vec<String>,
     },

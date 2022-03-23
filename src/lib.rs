@@ -1,22 +1,22 @@
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     fs::File,
-    io::{stdout, BufReader, BufWriter, Stdout, Write},
+    io::{BufReader, BufWriter},
     path::PathBuf,
 };
 
 use clap::lazy_static::lazy_static;
-use colored::{Color, Colorize};
+use colored::{Color, ColoredString, Colorize};
 use rand::{seq::SliceRandom, thread_rng};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_yaml::{self, Result};
 
 pub mod cli;
-use cli::{Location, Order};
+use cli::{Location, Order, Priority};
 
 #[derive(Deserialize, Serialize)]
-pub struct Errands(HashMap<usize, Vec<String>>);
+pub struct Errands(BTreeMap<Priority, Vec<String>>);
 
 lazy_static! {
     static ref LOCAL_PATH: PathBuf = PathBuf::from(".").join("errands.yml");
@@ -31,6 +31,16 @@ lazy_static! {
         .join("errands")
         .join("errands.yml");
     static ref GLOBAL_ERR: String = String::from("Error opening file: /etc/errands/errands.yml");
+    static ref PRIORITY_COLORS: BTreeMap<Priority, Color> = {
+        let mut m = BTreeMap::new();
+        m.insert(Priority::Emergency, Color::BrightWhite);
+        m.insert(Priority::Urgent, Color::Red);
+        m.insert(Priority::High, Color::Yellow);
+        m.insert(Priority::Medium, Color::Green);
+        m.insert(Priority::Routine, Color::Cyan);
+        m.insert(Priority::Deferred, Color::Magenta);
+        m
+    };
 }
 
 fn get_file(location: &Option<Location>) -> std::io::Result<File> {
@@ -64,8 +74,13 @@ impl Errands {
             Location::User => File::create(USER_PATH.as_path()).expect(USER_ERR.as_str()),
             Location::Global => File::create(GLOBAL_PATH.as_path()).expect(GLOBAL_ERR.as_str()),
         };
-        let mut errands = Errands(HashMap::new());
-        errands.0.insert(0, vec![]);
+        let mut errands = Errands(BTreeMap::new());
+        errands.0.insert(Priority::Deferred, vec![]);
+        errands.0.insert(Priority::Routine, vec![]);
+        errands.0.insert(Priority::Medium, vec![]);
+        errands.0.insert(Priority::High, vec![]);
+        errands.0.insert(Priority::Urgent, vec![]);
+        errands.0.insert(Priority::Emergency, vec![]);
 
         let writer = BufWriter::new(file);
         serde_yaml::to_writer(writer, &errands).unwrap();
@@ -79,31 +94,17 @@ impl Errands {
         Ok(errands)
     }
 
-    pub fn add(&mut self, errand: String, priority: &Option<usize>) {
-        match priority {
-            Some(priority) => match self.0.get_mut(&priority) {
-                Some(list) => list.push(errand),
-                None => {
-                    self.0.insert(*priority, vec![errand]);
-                }
-            },
+    pub fn add(&mut self, errand: String, priority: &Option<Priority>) {
+        let priority = priority.unwrap_or(Priority::Routine);
+        match self.0.get_mut(&priority) {
+            Some(list) => list.push(errand),
             None => {
-                let mut min = usize::MAX;
-                self.0
-                    .iter_mut()
-                    .fold(&mut vec![], |accum, (&priority, list)| {
-                        if priority < min {
-                            min = priority;
-                            return list;
-                        }
-                        accum
-                    })
-                    .push(errand);
+                self.0.insert(priority, vec![errand]);
             }
         }
     }
 
-    pub fn clean(&mut self, priority: &Option<usize>) {
+    pub fn clean(&mut self, priority: &Option<Priority>) {
         match priority {
             Some(priority) => {
                 self.0.remove(priority);
@@ -116,27 +117,23 @@ impl Errands {
         &self,
         ignore: &Option<String>,
         order: &Option<Order>,
-        priority: &Option<usize>,
+        priority: &Option<Priority>,
         count: &Option<usize>,
     ) {
-        let colors: Vec<Color> = vec![
-            Color::Red,
-            Color::Yellow,
-            Color::Green,
-            Color::Cyan,
-            Color::Blue,
-            Color::Magenta,
-        ];
-        let mut errands: Vec<String> = vec![];
+        let mut errands: Vec<ColoredString> = vec![];
         if let Some(priority) = priority {
             errands.extend(
                 self.0
                     .get(priority)
-                    .cloned()
-                    .expect("Priority level not found"),
+                    .unwrap()
+                    .iter()
+                    .map(|errand| errand.color(*PRIORITY_COLORS.get(priority).unwrap())),
             );
         } else {
-            errands.extend(self.0.values().flatten().cloned().collect::<Vec<String>>());
+            errands.extend(self.0.iter().flat_map(|(priority, list)| {
+                list.iter()
+                    .map(|errand| errand.color(*PRIORITY_COLORS.get(priority).unwrap()))
+            }));
         }
 
         if let Some(order) = order {
@@ -152,22 +149,19 @@ impl Errands {
 
         if let Some(ignore) = ignore {
             let ignore_regex = Regex::new(ignore.as_str()).unwrap();
-            errands.retain(|errand| !ignore_regex.is_match(errand.as_str()));
+            errands.retain(|errand| !ignore_regex.is_match(errand.to_string().as_str()));
         }
 
         if let Some(count) = count {
             errands.truncate(*count);
         }
 
-        errands
-            .iter()
-            .zip(colors.iter().cycle())
-            .for_each(|(errand, &color)| {
-                println!("{}", errand.color(color));
-            });
+        for errand in errands {
+            println!("{}", errand);
+        }
     }
 
-    pub fn remove(&mut self, priority: &Option<usize>, errands: Vec<String>) {
+    pub fn remove(&mut self, priority: &Option<Priority>, errands: Vec<String>) {
         match &priority {
             Some(priority) => {
                 self.0
