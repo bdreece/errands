@@ -1,9 +1,13 @@
+use std::process::exit;
+
 use clap::Parser;
 
 use errands::{
     cli::{Args, Commands},
     errands::Errands,
 };
+
+const UNEXPECTED_ERR: &'static str = "Unexpected error! Aborting";
 
 fn main() {
     let args = Args::parse();
@@ -13,78 +17,78 @@ fn main() {
             location,
             priority,
             errand,
-        } => {
-            if args.verbose > 1 {
-                println!("Adding errand {}", errand);
-                println!("Using errands list in location: {:?}", location);
-                if let Some(priority) = priority {
-                    println!("Adding with priority: {:?}", priority);
+        } => match Errands::open(args.verbose, &location) {
+            Ok(mut errands) => {
+                errands.add(args.verbose, errand, &priority);
+                if let Err(err) = errands.dump(args.verbose, true, &location) {
+                    eprintln!("{}: ({})", UNEXPECTED_ERR, err.to_string());
+                    exit(1);
                 }
             }
-            let mut errands = Errands::open(args.verbose, &location).unwrap();
-            errands.add(args.verbose, errand, &priority);
-            errands.dump(args.verbose, true, &location).unwrap();
-        }
-        Commands::Clean { location, priority } => {
-            if args.verbose > 1 {
-                println!("Cleaning errands");
-                println!("Using errands list in location: {:?}", location);
-                if let Some(priority) = priority {
-                    println!("Cleaning with priority: {:?}", priority);
+            Err(err) => {
+                eprintln!("{}: ({})", UNEXPECTED_ERR, err.to_string());
+                exit(1);
+            }
+        },
+        Commands::Clean { location, priority } => match Errands::open(args.verbose, &location) {
+            Ok(mut errands) => {
+                errands.clean(args.verbose, &priority);
+                if let Err(err) = errands.dump(args.verbose, true, &location) {
+                    eprintln!("{}: ({})", UNEXPECTED_ERR, err.to_string());
+                    exit(1);
                 }
             }
-            let mut errands = Errands::open(args.verbose, &location).unwrap();
-            errands.clean(args.verbose, &priority);
-            errands.dump(args.verbose, true, &location).unwrap();
-        }
+            Err(err) => {
+                eprintln!("{}: ({})", UNEXPECTED_ERR, err.to_string());
+                exit(1);
+            }
+        },
         Commands::List {
             location,
             ignore,
             order,
             priority,
             count,
-        } => {
-            if args.verbose > 1 {
-                println!("Printing errands");
-                println!("Using errands list in location: {:?}", location);
-                if let Some(pattern) = &ignore {
-                    println!("Ignoring pattern: {}", pattern);
-                }
-                if let Some(order) = &order {
-                    println!("Printing in order: {:?}", order);
-                }
-                if let Some(priority) = &priority {
-                    println!("Printing errands with priority: {:?}", priority);
-                }
-                if let Some(count) = &count {
-                    println!("Printing with count: {}", count);
+        } => match Errands::open(args.verbose, &location) {
+            Ok(errands) => {
+                if let Err(err) = errands.list(args.verbose, &ignore, &order, &priority, &count) {
+                    eprintln!("{}: ({})", UNEXPECTED_ERR, err.to_string());
+                    exit(1);
                 }
             }
-            let errands = Errands::open(args.verbose, &location).unwrap();
-            errands.list(args.verbose, &ignore, &order, &priority, &count);
-        }
-        Commands::Init { location } => {
-            if args.verbose > 1 {
-                println!("Initializing errands in location: {:?}", location);
+            Err(err) => {
+                eprintln!("{}: ({})", UNEXPECTED_ERR, err.to_string());
+                exit(1);
             }
-            let errands = Errands::new(args.verbose, &location);
-            errands.dump(args.verbose, false, &Some(location)).unwrap();
-        }
+        },
+        Commands::Init { location } => match Errands::new(args.verbose, &location) {
+            Ok(errands) => {
+                if let Err(err) = errands.dump(args.verbose, false, &Some(location)) {
+                    eprintln!("{}: ({})", UNEXPECTED_ERR, err.to_string());
+                    exit(1);
+                }
+            }
+            Err(err) => {
+                eprintln!("{}: ({})", UNEXPECTED_ERR, err.to_string());
+                exit(1);
+            }
+        },
         Commands::Rm {
             location,
             priority,
             errands,
-        } => {
-            if args.verbose > 1 {
-                println!("Removing items: {:#?}", errands);
-                println!("Using errands list in location: {:?}", location);
-                if let Some(priority) = priority {
-                    println!("Removing with priority: {:?}", priority);
+        } => match Errands::open(args.verbose, &location) {
+            Ok(mut list) => {
+                list.remove(args.verbose, &priority, errands);
+                if let Err(err) = list.dump(args.verbose, true, &location) {
+                    eprintln!("{}: ({})", UNEXPECTED_ERR, err.to_string());
+                    exit(1);
                 }
             }
-            let mut list = Errands::open(args.verbose, &location).unwrap();
-            list.remove(args.verbose, &priority, errands);
-            list.dump(args.verbose, true, &location).unwrap();
-        }
+            Err(err) => {
+                eprintln!("{}: ({})", UNEXPECTED_ERR, err.to_string());
+                exit(1);
+            }
+        },
     }
 }

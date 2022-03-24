@@ -39,8 +39,6 @@ pub enum Location {
     Local,
     /// ~/.config/errands/errands.yml
     User,
-    /// /etc/errands/errands.yml
-    Global,
 }
 
 /// Command line subcommands
