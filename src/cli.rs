@@ -68,7 +68,7 @@ pub enum Commands {
         errand: String,
     },
     /// Lists errands
-    List {
+    Ls {
         #[clap(short, long, arg_enum)]
         location: Option<Location>,
 
@@ -89,7 +89,7 @@ pub enum Commands {
         #[clap(short, long, arg_enum)]
         location: Option<Location>,
 
-        #[clap(arg_enum)]
+        #[clap(short, long, arg_enum)]
         priority: Option<Priority>,
 
         errands: Vec<String>,

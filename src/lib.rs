@@ -64,22 +64,6 @@ mod tests {
     }
 
     #[test]
-    fn dump() {
-        let errands = Errands::new(0, &Location::Local).unwrap();
-        errands.dump(0, true, &Some(Location::Local)).unwrap();
-        let errands = Errands::open(0, &Some(Location::Local)).unwrap();
-        assert_eq!(errands.data.keys().count(), 6);
-
-        errands
-            .data
-            .keys()
-            .zip(PRIORITIES.iter())
-            .for_each(|(found, expected)| assert_eq!(found, expected));
-
-        remove_file(PathBuf::from(".").join("errands.yml")).unwrap();
-    }
-
-    #[test]
     fn add() {
         let mut errands = Errands::new(0, &Location::Local).unwrap();
         errands.add(0, String::from("Something"), &Some(Priority::Emergency));
@@ -96,5 +80,26 @@ mod tests {
         errands.add(0, String::from("Something"), &None);
         errands.remove(0, &None, vec![String::from("Something")]);
         assert!(errands.data.values().all(|list| list.is_empty()));
+    }
+
+    #[test]
+    fn clean() {
+        let mut errands = Errands::new(0, &Location::Local).unwrap();
+        errands.add(0, String::from("Something"), &None);
+        errands.clean(0, &None);
+        assert!(errands.data.values().all(|list| list.is_empty()));
+    }
+
+    #[test]
+    fn init() {
+        let errands = Errands::new(0, &Location::Local).unwrap();
+        errands.dump(0, true, &None).unwrap();
+        let errands = Errands::open(0, &None).unwrap();
+        assert!(errands
+            .data
+            .iter()
+            .zip(PRIORITIES.iter())
+            .all(|((key, val), pri)| key == pri && val.is_empty()));
+        remove_file(PathBuf::from(".").join("errands.yml")).unwrap();
     }
 }

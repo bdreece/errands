@@ -26,8 +26,9 @@ fn create_file(verbose: usize, location: &Location) -> File {
         Location::Local => {
             if verbose > 1 {
                 println!(
-                    "Creating errands list in {}",
-                    LOCAL_PATH.to_str().unwrap().green()
+                    "{} {}",
+                    "Creating errands list in".green(),
+                    LOCAL_PATH.to_str().unwrap().white()
                 );
             }
             File::create(LOCAL_PATH.as_path())
@@ -35,8 +36,9 @@ fn create_file(verbose: usize, location: &Location) -> File {
         Location::User => {
             if verbose > 1 {
                 println!(
-                    "Creating errands list in {}",
-                    USER_PATH.to_str().unwrap().green()
+                    "{} {}",
+                    "Creating errands list in".green(),
+                    USER_PATH.to_str().unwrap().white()
                 );
             }
             File::create(USER_PATH.as_path())
@@ -46,7 +48,12 @@ fn create_file(verbose: usize, location: &Location) -> File {
     match file {
         Ok(file) => file,
         Err(err) => {
-            eprintln!("Error creating file ({:?}): {}", location, err.to_string());
+            eprintln!(
+                "{} ({:?}): {}",
+                "Error creating file".red(),
+                location,
+                err.to_string().white()
+            );
             exit(1);
         }
     }
@@ -58,11 +65,9 @@ fn open_file(verbose: usize, truncate: bool, location: &Option<Location>) -> Fil
             Location::Local => {
                 if verbose > 1 {
                     println!(
-                        "{}",
-                        format!(
-                            "Opening errands list from: {}",
-                            LOCAL_PATH.to_str().unwrap().yellow()
-                        )
+                        "{} {}",
+                        "Opening errands list from:".green(),
+                        LOCAL_PATH.to_str().unwrap().white()
                     );
                 }
                 File::options()
@@ -74,12 +79,9 @@ fn open_file(verbose: usize, truncate: bool, location: &Option<Location>) -> Fil
             Location::User => {
                 if verbose > 1 {
                     println!(
-                        "{}",
-                        format!(
-                            "Opening errands list from: {}",
-                            USER_PATH.to_str().unwrap().yellow()
-                        )
-                        .green()
+                        "{} {}",
+                        "Opening errands list from:".green(),
+                        USER_PATH.to_str().unwrap().white()
                     );
                 }
                 File::options()
@@ -101,12 +103,9 @@ fn open_file(verbose: usize, truncate: bool, location: &Option<Location>) -> Fil
             {
                 if verbose > 1 {
                     println!(
-                        "{}",
-                        format!(
-                            "Found errands list in: {}",
-                            LOCAL_PATH.to_str().unwrap().yellow()
-                        )
-                        .green()
+                        "{} {}",
+                        "Found errands list in:".green(),
+                        LOCAL_PATH.to_str().unwrap().white()
                     );
                 }
                 Ok(file)
@@ -118,12 +117,9 @@ fn open_file(verbose: usize, truncate: bool, location: &Option<Location>) -> Fil
             {
                 if verbose > 1 {
                     println!(
-                        "{}",
-                        format!(
-                            "Found errands list in: {}",
-                            USER_PATH.to_str().unwrap().yellow()
-                        )
-                        .green()
+                        "{} {}",
+                        "Found errands list in: {}".green(),
+                        USER_PATH.to_str().unwrap().white()
                     );
                 }
                 Ok(file)
@@ -139,7 +135,11 @@ fn open_file(verbose: usize, truncate: bool, location: &Option<Location>) -> Fil
     match file {
         Ok(file) => file,
         Err(err) => {
-            eprintln!("Error opening file: {}", err.to_string());
+            eprintln!(
+                "{} {}",
+                "Error opening file:".red(),
+                err.to_string().white()
+            );
             exit(1);
         }
     }
@@ -158,10 +158,6 @@ impl Errands {
         errands.data.insert(Priority::High, vec![]);
         errands.data.insert(Priority::Urgent, vec![]);
         errands.data.insert(Priority::Emergency, vec![]);
-
-        if verbose > 1 {
-            println!("{}", "Dumping template config to file".green());
-        }
 
         let writer = BufWriter::new(file);
         serde_yaml::to_writer(writer, &errands)?;
@@ -189,7 +185,7 @@ impl Errands {
                 format!(
                     "Added '{}' to priority level: '{}'",
                     errand.white(),
-                    format!("{:?}", priority).yellow()
+                    format!("{:?}", priority).white()
                 )
                 .green()
             );
@@ -207,7 +203,7 @@ impl Errands {
 
     pub fn list(
         &self,
-        _verbose: usize,
+        verbose: usize,
         ignore: &Option<String>,
         order: &Option<Order>,
         priority: &Option<Priority>,
@@ -215,6 +211,13 @@ impl Errands {
     ) -> Result<(), String> {
         let mut errands: Vec<ColoredString> = vec![];
         if let Some(priority) = priority {
+            if verbose > 1 {
+                println!(
+                    "{} {:?}",
+                    "Listing errands with priority:".green(),
+                    priority
+                );
+            }
             errands.extend(
                 self.data
                     .get(priority)
@@ -223,6 +226,9 @@ impl Errands {
                     .map(|errand| errand.color(*PRIORITY_COLORS.get(priority).unwrap())),
             );
         } else {
+            if verbose > 1 {
+                println!("{}", "Listing errands of all priorities".green());
+            }
             errands.extend(self.data.iter().flat_map(|(priority, list)| {
                 list.iter()
                     .map(|errand| errand.color(*PRIORITY_COLORS.get(priority).unwrap()))
@@ -230,6 +236,9 @@ impl Errands {
         }
 
         if let Some(order) = order {
+            if verbose > 1 {
+                println!("{} {:?}", "Listing errands in order:".green(), order);
+            }
             match &order {
                 Order::Descending => {}
                 Order::Ascending => errands.reverse(),
@@ -241,31 +250,52 @@ impl Errands {
         }
 
         if let Some(ignore) = ignore {
+            if verbose > 1 {
+                println!("{} {}", "Ignoring regex string:".green(), ignore.white());
+            }
             let ignore_regex = Regex::new(ignore.as_str())
                 .map_err(|err| format!("Error parsing regex {}: ({})", ignore, err.to_string()))?;
             errands.retain(|errand| !ignore_regex.is_match(errand.to_string().as_str()));
         }
 
         if let Some(count) = count {
+            if verbose > 1 {
+                println!(
+                    "{} {}",
+                    "Truncating list to size:".green(),
+                    count.to_string().white()
+                );
+            }
             errands.truncate(*count);
         }
 
+        println!("{}", "Errands:".green());
         for errand in errands {
-            println!("{}", errand);
+            println!("- {}", errand);
         }
 
         Ok(())
     }
 
-    pub fn remove(&mut self, _verbose: usize, priority: &Option<Priority>, errands: Vec<String>) {
+    pub fn remove(&mut self, verbose: usize, priority: &Option<Priority>, errands: Vec<String>) {
         match &priority {
             Some(priority) => {
+                if verbose > 1 {
+                    println!(
+                        "{} {:?}",
+                        "Removing errands with priority:".green(),
+                        priority
+                    );
+                }
                 self.data
                     .entry(*priority)
                     .or_insert(vec![])
                     .retain(|errand| !errands.contains(errand));
             }
             None => {
+                if verbose > 1 {
+                    println!("{} {:?}", "Removing errands by name:".green(), errands);
+                }
                 self.data
                     .values_mut()
                     .for_each(|list| list.retain(|errand| !errands.contains(errand)));
@@ -279,9 +309,15 @@ impl Errands {
         truncate: bool,
         location: &Option<Location>,
     ) -> Result<(), serde_yaml::Error> {
+        if verbose > 1 {
+            println!("{}", "Dumping template config to file".green());
+        }
         let file = open_file(verbose, truncate, &location);
         let writer = BufWriter::new(file);
         serde_yaml::to_writer(writer, &self)?;
+        if verbose > 1 {
+            println!("{}", "Successfully wrote to errands list!".cyan());
+        }
         Ok(())
     }
 }
